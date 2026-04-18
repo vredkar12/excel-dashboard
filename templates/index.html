@@ -101,6 +101,33 @@
             align-items: center;
             gap: 10px;
         }
+
+        .upload-auth {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .logout-btn {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #f57c00;
+        }
+
+        .upload-note {
+            color: #666;
+            font-size: 13px;
+        }
         
         .file-input {
             display: none;
@@ -349,9 +376,14 @@
                 <div class="status-item auto-refresh-info">
                     Auto-refresh: every 30 seconds
                 </div>
-                <div class="upload-section">
-                    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" onchange="uploadFile()">
-                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">📤 Upload New Data</button>
+                <div class="upload-auth">
+                    <div id="uploadReadOnlyNote" class="upload-note">View-only mode</div>
+                    <div id="uploadSection" class="upload-section" style="display: none;">
+                        <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" onchange="uploadFile()">
+                        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">📤 Upload New Data</button>
+                    </div>
+                    <button id="loginBtn" class="upload-btn" onclick="loginForUpload()">Admin Login</button>
+                    <button id="logoutBtn" class="logout-btn" onclick="logoutUploadAccess()" style="display: none;">Logout</button>
                 </div>
                 <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Now</button>
             </div>
@@ -424,13 +456,101 @@
         let autoRefreshInterval;
         let allData = {};
         let filterOptions = {};
+        let uploadConfigured = false;
         
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
+            checkAdminStatus();
             loadData();
             // Auto-refresh every 30 seconds
             autoRefreshInterval = setInterval(loadData, 30000);
         });
+
+        function updateUploadAccessUI(canUpload) {
+            const uploadSection = document.getElementById('uploadSection');
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const readOnlyNote = document.getElementById('uploadReadOnlyNote');
+
+            if (!uploadConfigured) {
+                uploadSection.style.display = 'none';
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'none';
+                readOnlyNote.textContent = 'Upload is disabled until the admin password is configured on the server';
+                return;
+            }
+
+            uploadSection.style.display = canUpload ? 'flex' : 'none';
+            loginBtn.style.display = canUpload ? 'none' : 'inline-block';
+            logoutBtn.style.display = canUpload ? 'inline-block' : 'none';
+            readOnlyNote.textContent = canUpload ? 'Admin upload access enabled for this browser session' : 'View-only mode';
+        }
+
+        function checkAdminStatus() {
+            fetch('/api/admin/status')
+                .then(response => response.json())
+                .then(data => {
+                    uploadConfigured = !!data.upload_configured;
+                    updateUploadAccessUI(!!data.can_upload);
+                })
+                .catch(error => {
+                    console.error('Failed to check admin status:', error.message);
+                });
+        }
+
+        function loginForUpload() {
+            const password = window.prompt('Enter admin password to upload master data');
+            if (!password) return;
+
+            const uploadMessage = document.getElementById('uploadMessage');
+            uploadMessage.style.display = 'block';
+            uploadMessage.className = 'upload-message';
+            uploadMessage.textContent = 'Checking admin access...';
+
+            fetch('/api/admin/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(result => {
+                if (!result.ok) {
+                    uploadMessage.className = 'upload-message upload-error';
+                    uploadMessage.textContent = 'Error: ' + result.data.error;
+                    return;
+                }
+
+                uploadMessage.className = 'upload-message upload-success';
+                uploadMessage.textContent = 'Success: ' + result.data.message;
+                updateUploadAccessUI(true);
+            })
+            .catch(error => {
+                uploadMessage.className = 'upload-message upload-error';
+                uploadMessage.textContent = 'Login failed: ' + error.message;
+            });
+        }
+
+        function logoutUploadAccess() {
+            fetch('/api/admin/logout', {
+                method: 'POST'
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(() => {
+                updateUploadAccessUI(false);
+                const uploadMessage = document.getElementById('uploadMessage');
+                uploadMessage.style.display = 'block';
+                uploadMessage.className = 'upload-message upload-success';
+                uploadMessage.textContent = 'Upload access removed for this browser session';
+            })
+            .catch(error => {
+                const uploadMessage = document.getElementById('uploadMessage');
+                uploadMessage.style.display = 'block';
+                uploadMessage.className = 'upload-message upload-error';
+                uploadMessage.textContent = 'Logout failed: ' + error.message;
+            });
+        }
         
         function loadData() {
             fetch('/api/data')
@@ -663,14 +783,14 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(result => {
+                if (!result.ok) {
                     uploadMessage.className = 'upload-message upload-error';
-                    uploadMessage.textContent = 'Error: ' + data.error;
+                    uploadMessage.textContent = 'Error: ' + result.data.error;
                 } else {
                     uploadMessage.className = 'upload-message upload-success';
-                    uploadMessage.textContent = '✅ ' + data.message;
+                    uploadMessage.textContent = 'Success: ' + result.data.message;
                     // Refresh data after successful upload
                     setTimeout(() => {
                         loadData();
@@ -689,7 +809,5 @@
     </script>
 </body>
 </html>
-git add templates/index.html
-git commit -m "Update dashboard title"
-git push origin master
+
 

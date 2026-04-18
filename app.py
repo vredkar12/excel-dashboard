@@ -1,12 +1,14 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session
 import pandas as pd
 import os
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-this-secret-before-production")
 
 # Configuration
 EXCEL_FILE = "Beauty_PF Status_20260416.xlsx"
+UPLOAD_ADMIN_PASSWORD = os.environ.get("UPLOAD_ADMIN_PASSWORD", "")
 
 # Create sample Excel file if it doesn't exist (for first deployment)
 def create_sample_excel():
@@ -38,10 +40,48 @@ ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def is_upload_admin():
+    return session.get("can_upload") is True
+
+@app.route('/api/admin/status')
+def admin_status():
+    """Return whether upload is configured and the current user can upload."""
+    return jsonify({
+        "upload_configured": bool(UPLOAD_ADMIN_PASSWORD),
+        "can_upload": is_upload_admin()
+    })
+
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    """Authenticate an upload admin for the current session."""
+    if not UPLOAD_ADMIN_PASSWORD:
+        return jsonify({"error": "Upload access is not configured on the server."}), 503
+
+    payload = request.get_json(silent=True) or {}
+    password = str(payload.get("password", ""))
+
+    if password != UPLOAD_ADMIN_PASSWORD:
+        return jsonify({"error": "Invalid admin password."}), 401
+
+    session["can_upload"] = True
+    return jsonify({"success": True, "message": "Upload access granted."})
+
+@app.route('/api/admin/logout', methods=['POST'])
+def admin_logout():
+    """Remove upload admin access for the current session."""
+    session.pop("can_upload", None)
+    return jsonify({"success": True})
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     """Handle file upload to update Excel data"""
     try:
+        if not UPLOAD_ADMIN_PASSWORD:
+            return jsonify({"error": "Upload access is disabled until an admin password is configured."}), 503
+
+        if not is_upload_admin():
+            return jsonify({"error": "Admin login required to upload master data."}), 403
+
         if 'file' not in request.files:
             return jsonify({"error": "No file provided"}), 400
         
