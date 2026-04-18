@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
+*.xlsx
 .env
 *.log
 .DS_Store
