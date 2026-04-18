@@ -9,6 +9,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-this-secret-before-p
 
 # Configuration
 EXCEL_FILE = "Beauty_PF Status_20260416.xlsx"
+ACTIVE_EMPLOYEE_XLSX_FILE = "Active_Employee_Codes.xlsx"
+ACTIVE_EMPLOYEE_CSV_FILE = "Active_Employee_Codes.csv"
 UPLOAD_ADMIN_PASSWORD = os.environ.get("UPLOAD_ADMIN_PASSWORD", "")
 
 # Create sample Excel file if it doesn't exist (for first deployment)
@@ -36,7 +38,7 @@ create_sample_excel()
 
 # Configure upload folder
 UPLOAD_FOLDER = '.'
-ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -50,22 +52,78 @@ def has_dashboard_access():
 def is_upload_admin():
     return session.get("can_upload") is True
 
-def employee_code_exists(employee_code):
-    if not os.path.exists(EXCEL_FILE):
-        return False
+def get_active_employee_file():
+    if os.path.exists(ACTIVE_EMPLOYEE_XLSX_FILE):
+        return ACTIVE_EMPLOYEE_XLSX_FILE
+    if os.path.exists(ACTIVE_EMPLOYEE_CSV_FILE):
+        return ACTIVE_EMPLOYEE_CSV_FILE
+    return ""
 
+def get_code_column(columns):
+    for column in columns:
+        normalized = str(column).strip().lower().replace('_', ' ')
+        if 'employee' in normalized and 'code' in normalized:
+            return column
+    return None
+
+def read_active_employee_codes():
+    active_file = get_active_employee_file()
+    if not active_file:
+        return set()
+
+    try:
+        if active_file.lower().endswith('.csv'):
+            df = pd.read_csv(active_file, dtype=str)
+        else:
+            df = pd.read_excel(active_file, dtype=str)
+
+        code_column = get_code_column(df.columns)
+        if not code_column:
+            return set()
+
+        codes = {
+            normalize_employee_code(value)
+            for value in df[code_column].fillna('')
+            if len(normalize_employee_code(value)) == 8
+        }
+        return codes
+    except Exception:
+        return set()
+
+def active_employee_list_info():
+    codes = read_active_employee_codes()
+    last_updated = ""
+    active_file = get_active_employee_file()
+    if active_file:
+        last_updated = datetime.fromtimestamp(os.path.getmtime(active_file)).strftime("%Y-%m-%d %H:%M:%S")
+
+    return {
+        "configured": bool(active_file),
+        "count": len(codes),
+        "last_updated": last_updated
+    }
+
+def employee_code_exists(employee_code):
     normalized_code = normalize_employee_code(employee_code)
     if len(normalized_code) != 8:
+        return False
+
+    active_codes = read_active_employee_codes()
+    if active_codes:
+        return normalized_code in active_codes
+
+    if not os.path.exists(EXCEL_FILE):
         return False
 
     try:
         excel_file = pd.ExcelFile(EXCEL_FILE)
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name, dtype=str)
-            if 'Employee Code' not in df.columns:
+            code_column = get_code_column(df.columns)
+            if not code_column:
                 continue
 
-            codes = df['Employee Code'].fillna('').map(normalize_employee_code)
+            codes = df[code_column].fillna('').map(normalize_employee_code)
             if (codes == normalized_code).any():
                 return True
     except Exception:
@@ -122,16 +180,18 @@ def access_logout():
     return jsonify({"success": True})
 
 @app.route('/api/admin/status')
-@dashboard_api_required
 def admin_status():
     """Return whether upload is configured and the current user can upload."""
+    active_info = active_employee_list_info()
     return jsonify({
         "upload_configured": bool(UPLOAD_ADMIN_PASSWORD),
-        "can_upload": is_upload_admin()
+        "can_upload": is_upload_admin(),
+        "active_codes_configured": active_info["configured"],
+        "active_codes_count": active_info["count"],
+        "active_codes_last_updated": active_info["last_updated"]
     })
 
 @app.route('/api/admin/login', methods=['POST'])
-@dashboard_api_required
 def admin_login():
     """Authenticate an upload admin for the current session."""
     if not UPLOAD_ADMIN_PASSWORD:
@@ -147,11 +207,52 @@ def admin_login():
     return jsonify({"success": True, "message": "Upload access granted."})
 
 @app.route('/api/admin/logout', methods=['POST'])
-@dashboard_api_required
 def admin_logout():
     """Remove upload admin access for the current session."""
     session.pop("can_upload", None)
     return jsonify({"success": True})
+
+@app.route('/api/active-codes/upload', methods=['POST'])
+def upload_active_employee_codes():
+    """Upload the active employee code list used for dashboard access."""
+    try:
+        if not UPLOAD_ADMIN_PASSWORD:
+            return jsonify({"error": "Upload access is disabled until an admin password is configured."}), 503
+
+        if not is_upload_admin():
+            return jsonify({"error": "Admin login required to upload active employee codes."}), 403
+
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Invalid file type. Please upload .xlsx, .xls, or .csv file"}), 400
+
+        extension = file.filename.rsplit('.', 1)[1].lower()
+        target_file = ACTIVE_EMPLOYEE_XLSX_FILE if extension != 'csv' else ACTIVE_EMPLOYEE_CSV_FILE
+
+        file.save(target_file)
+        if target_file == ACTIVE_EMPLOYEE_XLSX_FILE and os.path.exists(ACTIVE_EMPLOYEE_CSV_FILE):
+            os.remove(ACTIVE_EMPLOYEE_CSV_FILE)
+        if target_file == ACTIVE_EMPLOYEE_CSV_FILE and os.path.exists(ACTIVE_EMPLOYEE_XLSX_FILE):
+            os.remove(ACTIVE_EMPLOYEE_XLSX_FILE)
+
+        active_codes = read_active_employee_codes()
+        if not active_codes:
+            return jsonify({"error": "No valid 8-digit employee codes were found in the uploaded file."}), 400
+
+        return jsonify({
+            "success": True,
+            "message": "Active employee code list uploaded successfully",
+            "count": len(active_codes),
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])
 @dashboard_api_required
@@ -216,10 +317,16 @@ def read_excel_data():
 @app.route('/')
 def index():
     """Master dashboard page"""
+    active_info = active_employee_list_info()
     return render_template(
         'home.html',
         has_access=has_dashboard_access(),
-        employee_code=session.get("employee_code", "")
+        employee_code=session.get("employee_code", ""),
+        can_upload=is_upload_admin(),
+        upload_configured=bool(UPLOAD_ADMIN_PASSWORD),
+        active_codes_configured=active_info["configured"],
+        active_codes_count=active_info["count"],
+        active_codes_last_updated=active_info["last_updated"]
     )
 
 @app.route('/e-nomination-pendancy')

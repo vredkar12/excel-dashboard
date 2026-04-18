@@ -84,7 +84,8 @@
         }
 
         .access-card,
-        .dashboard-card {
+        .dashboard-card,
+        .admin-card {
             background: rgba(255, 255, 255, 0.84);
             border: 1px solid var(--border);
             border-radius: 24px;
@@ -108,6 +109,11 @@
             flex-wrap: wrap;
             gap: 14px;
             align-items: center;
+        }
+
+        .input-stack {
+            display: grid;
+            gap: 14px;
         }
 
         .code-input {
@@ -211,6 +217,15 @@
             align-items: center;
         }
 
+        .subtle {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .file-input {
+            display: none;
+        }
+
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -276,7 +291,7 @@
             <div class="access-card">
                 <h2 class="section-title">Employee Access Check</h2>
                 <p class="section-copy">
-                    Only employees whose 8-digit code exists in the master data can open the dashboard.
+                    Only employees whose 8-digit code exists in the active employee list can open the dashboard.
                 </p>
                 <div class="input-row">
                     <input
@@ -308,14 +323,65 @@
             </div>
             {% endif %}
 
+            <div class="admin-card" style="margin-top: 24px;">
+                <h2 class="section-title">Master Admin Access</h2>
+                <p class="section-copy">
+                    Only your admin login can upload the main master file or the active employee code list.
+                </p>
+
+                {% if not upload_configured %}
+                <div class="message error" style="display: block;">
+                    Admin upload is disabled until `UPLOAD_ADMIN_PASSWORD` is configured on the server.
+                </div>
+                {% elif not can_upload %}
+                <div class="input-stack">
+                    <div class="input-row">
+                        <input
+                            id="adminPassword"
+                            class="code-input"
+                            type="password"
+                            placeholder="Enter admin password"
+                            autocomplete="off">
+                        <button class="primary-btn" onclick="loginAsAdmin()">Master Login</button>
+                    </div>
+                    <div class="subtle">This unlocks upload controls only for your current browser session.</div>
+                </div>
+                {% else %}
+                <div class="dashboard-meta">
+                    <span class="badge">Admin session active</span>
+                    <span>Only this session can upload files right now.</span>
+                </div>
+                <div class="input-stack">
+                    <div class="actions">
+                        <input type="file" id="activeCodesInput" class="file-input" accept=".xlsx,.xls,.csv" onchange="uploadActiveCodes()">
+                        <button class="primary-btn" onclick="document.getElementById('activeCodesInput').click()">Upload Active Employee List</button>
+                        <button class="secondary-btn" onclick="logoutAdmin()">Logout Admin</button>
+                    </div>
+                    <div class="subtle">
+                        Upload a file with an `Employee Code` column containing valid 8-digit employee codes.
+                    </div>
+                    <div class="subtle">
+                        Active list status:
+                        {% if active_codes_configured %}
+                        {{ active_codes_count }} codes loaded{% if active_codes_last_updated %}, updated {{ active_codes_last_updated }}{% endif %}.
+                        {% else %}
+                        no active employee list uploaded yet.
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div id="adminMessage" class="message"></div>
+            </div>
+
             <div class="info-grid">
                 <article class="info-card">
                     <div class="info-title">Who Can Enter</div>
-                    <div class="info-copy">Only an employee code that matches the master Excel data will unlock the dashboard.</div>
+                    <div class="info-copy">Only an employee code that matches the active employee list will unlock the dashboard.</div>
                 </article>
                 <article class="info-card">
                     <div class="info-title">Upload Control</div>
-                    <div class="info-copy">After access is granted, admin upload is still protected separately by the upload password.</div>
+                    <div class="info-copy">Only your admin session can upload the master dashboard file or the active employee list.</div>
                 </article>
                 <article class="info-card">
                     <div class="info-title">Session Access</div>
@@ -361,6 +427,94 @@
             });
         }
 
+        function loginAsAdmin() {
+            const input = document.getElementById('adminPassword');
+            const message = document.getElementById('adminMessage');
+            const password = input ? input.value : '';
+
+            message.className = 'message';
+            message.textContent = '';
+
+            fetch('/api/admin/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(result => {
+                if (!result.ok) {
+                    message.className = 'message error';
+                    message.textContent = result.data.error;
+                    return;
+                }
+
+                message.className = 'message success';
+                message.textContent = result.data.message;
+                window.setTimeout(() => {
+                    window.location.reload();
+                }, 350);
+            })
+            .catch(error => {
+                message.className = 'message error';
+                message.textContent = 'Admin login failed: ' + error.message;
+            });
+        }
+
+        function logoutAdmin() {
+            fetch('/api/admin/logout', {
+                method: 'POST'
+            })
+            .then(() => {
+                window.location.reload();
+            })
+            .catch(error => {
+                const message = document.getElementById('adminMessage');
+                message.className = 'message error';
+                message.textContent = 'Admin logout failed: ' + error.message;
+            });
+        }
+
+        function uploadActiveCodes() {
+            const input = document.getElementById('activeCodesInput');
+            const message = document.getElementById('adminMessage');
+            const file = input && input.files ? input.files[0] : null;
+
+            if (!file) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            message.className = 'message';
+            message.textContent = '';
+
+            fetch('/api/active-codes/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(result => {
+                if (!result.ok) {
+                    message.className = 'message error';
+                    message.textContent = result.data.error;
+                    return;
+                }
+
+                message.className = 'message success';
+                message.textContent = result.data.message + ' (' + result.data.count + ' codes)';
+                window.setTimeout(() => {
+                    window.location.reload();
+                }, 700);
+            })
+            .catch(error => {
+                message.className = 'message error';
+                message.textContent = 'Upload failed: ' + error.message;
+            });
+        }
+
         function logoutAccess() {
             fetch('/api/access/logout', {
                 method: 'POST'
@@ -382,6 +536,15 @@
             employeeCodeInput.addEventListener('keydown', function(event) {
                 if (event.key === 'Enter') {
                     loginWithEmployeeCode();
+                }
+            });
+        }
+
+        const adminPasswordInput = document.getElementById('adminPassword');
+        if (adminPasswordInput) {
+            adminPasswordInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    loginAsAdmin();
                 }
             });
         }
