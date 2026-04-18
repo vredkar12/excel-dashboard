@@ -14,12 +14,18 @@
         :root {
             --bg-start: #f7efe5;
             --bg-end: #d8e2dc;
-            --panel: rgba(255, 255, 255, 0.88);
+            --panel: rgba(255, 255, 255, 0.9);
             --text: #1f2933;
             --muted: #52606d;
             --accent: #b56576;
             --accent-dark: #8f4b59;
+            --accent-soft: rgba(181, 101, 118, 0.12);
+            --border: rgba(82, 96, 109, 0.14);
             --shadow: 0 24px 60px rgba(31, 41, 51, 0.16);
+            --error-bg: #f8d7da;
+            --error-text: #842029;
+            --success-bg: #d1e7dd;
+            --success-text: #0f5132;
         }
 
         body {
@@ -27,7 +33,7 @@
             font-family: Georgia, "Times New Roman", serif;
             color: var(--text);
             background:
-                radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 32%),
+                radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 32%),
                 linear-gradient(135deg, var(--bg-start), var(--bg-end));
             display: flex;
             align-items: center;
@@ -36,7 +42,7 @@
         }
 
         .shell {
-            width: min(920px, 100%);
+            width: min(960px, 100%);
             background: var(--panel);
             border: 1px solid rgba(255, 255, 255, 0.7);
             border-radius: 28px;
@@ -47,7 +53,7 @@
         .hero {
             padding: 56px 48px;
             display: grid;
-            gap: 28px;
+            gap: 24px;
             background:
                 linear-gradient(125deg, rgba(181, 101, 118, 0.14), rgba(255, 255, 255, 0)),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.95));
@@ -63,14 +69,139 @@
         h1 {
             font-size: clamp(36px, 6vw, 58px);
             line-height: 1.05;
-            max-width: 620px;
+            max-width: 680px;
         }
 
         .description {
-            max-width: 640px;
+            max-width: 680px;
             font-size: 18px;
             line-height: 1.7;
             color: var(--muted);
+        }
+
+        .panel {
+            padding: 0 48px 48px;
+        }
+
+        .access-card,
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 28px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .section-copy {
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--muted);
+            margin-bottom: 22px;
+        }
+
+        .input-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .code-input {
+            flex: 1 1 280px;
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            font-size: 18px;
+            letter-spacing: 0.14em;
+            color: var(--text);
+            background: white;
+        }
+
+        .code-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+
+        .primary-btn,
+        .secondary-btn,
+        .dashboard-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 28px;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .primary-btn,
+        .dashboard-link {
+            background: var(--accent);
+            color: white;
+            border: none;
+            box-shadow: 0 14px 32px rgba(181, 101, 118, 0.28);
+        }
+
+        .primary-btn:hover,
+        .dashboard-link:hover {
+            background: var(--accent-dark);
+            transform: translateY(-2px);
+        }
+
+        .secondary-btn {
+            background: transparent;
+            color: var(--accent-dark);
+            border: 1px solid rgba(143, 75, 89, 0.28);
+        }
+
+        .secondary-btn:hover {
+            transform: translateY(-2px);
+            background: rgba(143, 75, 89, 0.08);
+        }
+
+        .message {
+            margin-top: 16px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            display: none;
+            font-size: 15px;
+        }
+
+        .message.error {
+            display: block;
+            background: var(--error-bg);
+            color: var(--error-text);
+        }
+
+        .message.success {
+            display: block;
+            background: var(--success-bg);
+            color: var(--success-text);
+        }
+
+        .dashboard-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 24px;
+            color: var(--muted);
+        }
+
+        .badge {
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(181, 101, 118, 0.12);
+            color: var(--accent-dark);
+            font-size: 14px;
         }
 
         .actions {
@@ -80,46 +211,21 @@
             align-items: center;
         }
 
-        .dashboard-link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px 28px;
-            border-radius: 999px;
-            background: var(--accent);
-            color: white;
-            text-decoration: none;
-            font-size: 17px;
-            font-weight: 600;
-            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-            box-shadow: 0 14px 32px rgba(181, 101, 118, 0.28);
-        }
-
-        .dashboard-link:hover {
-            background: var(--accent-dark);
-            transform: translateY(-2px);
-        }
-
-        .helper {
-            font-size: 15px;
-            color: var(--muted);
-        }
-
-        .cards {
+        .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 18px;
-            padding: 0 48px 48px;
+            margin-top: 24px;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.82);
-            border: 1px solid rgba(82, 96, 109, 0.12);
+        .info-card {
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid var(--border);
             border-radius: 22px;
             padding: 22px;
         }
 
-        .card-title {
+        .info-title {
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.08em;
@@ -127,21 +233,28 @@
             margin-bottom: 10px;
         }
 
-        .card-copy {
-            font-size: 16px;
+        .info-copy {
+            font-size: 15px;
             line-height: 1.6;
-            color: var(--text);
         }
 
         @media (max-width: 640px) {
+            .hero,
+            .panel {
+                padding-left: 24px;
+                padding-right: 24px;
+            }
+
             .hero {
-                padding: 36px 24px;
+                padding-top: 36px;
             }
 
-            .cards {
-                padding: 0 24px 24px;
+            .panel {
+                padding-bottom: 24px;
             }
 
+            .primary-btn,
+            .secondary-btn,
             .dashboard-link {
                 width: 100%;
             }
@@ -154,28 +267,124 @@
             <div class="eyebrow">HR Control Center</div>
             <h1>Tira stores HR Dashboard</h1>
             <p class="description">
-                Open the available HR tracker dashboard below. Team members can view data, and authorized admins can manage master data from inside the tracker.
+                Access to the dashboard starts with employee code verification. Enter your valid 8-digit employee code to continue.
             </p>
-            <div class="actions">
-                <a class="dashboard-link" href="/e-nomination-pendancy">E Nomination pendancy</a>
-                <div class="helper">Choose a dashboard to continue.</div>
-            </div>
         </section>
 
-        <section class="cards">
-            <article class="card">
-                <div class="card-title">Viewer Access</div>
-                <div class="card-copy">Anyone with the link can open the dashboard and review the live data.</div>
-            </article>
-            <article class="card">
-                <div class="card-title">Admin Uploads</div>
-                <div class="card-copy">Master data upload stays protected behind the admin login on the dashboard page.</div>
-            </article>
-            <article class="card">
-                <div class="card-title">Live Updates</div>
-                <div class="card-copy">The tracker keeps its existing refresh, filters, and upload flow after you enter the dashboard.</div>
-            </article>
+        <section class="panel">
+            {% if not has_access %}
+            <div class="access-card">
+                <h2 class="section-title">Employee Access Check</h2>
+                <p class="section-copy">
+                    Only employees whose 8-digit code exists in the master data can open the dashboard.
+                </p>
+                <div class="input-row">
+                    <input
+                        id="employeeCode"
+                        class="code-input"
+                        type="text"
+                        inputmode="numeric"
+                        maxlength="8"
+                        placeholder="Enter 8-digit employee code"
+                        autocomplete="off">
+                    <button class="primary-btn" onclick="loginWithEmployeeCode()">Continue</button>
+                </div>
+                <div id="accessMessage" class="message"></div>
+            </div>
+            {% else %}
+            <div class="dashboard-card">
+                <div class="dashboard-meta">
+                    <span class="badge">Access granted</span>
+                    <span>Employee code: <strong>{{ employee_code }}</strong></span>
+                </div>
+                <h2 class="section-title">Available Dashboard</h2>
+                <p class="section-copy">
+                    Your session is verified. Open the HR tracker below, or sign out to lock access again on this browser.
+                </p>
+                <div class="actions">
+                    <a class="dashboard-link" href="/e-nomination-pendancy">E Nomination pendancy</a>
+                    <button class="secondary-btn" onclick="logoutAccess()">Logout</button>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="info-grid">
+                <article class="info-card">
+                    <div class="info-title">Who Can Enter</div>
+                    <div class="info-copy">Only an employee code that matches the master Excel data will unlock the dashboard.</div>
+                </article>
+                <article class="info-card">
+                    <div class="info-title">Upload Control</div>
+                    <div class="info-copy">After access is granted, admin upload is still protected separately by the upload password.</div>
+                </article>
+                <article class="info-card">
+                    <div class="info-title">Session Access</div>
+                    <div class="info-copy">Access stays in the current browser session until you log out or clear the session.</div>
+                </article>
+            </div>
         </section>
     </main>
+
+    <script>
+        function loginWithEmployeeCode() {
+            const input = document.getElementById('employeeCode');
+            const message = document.getElementById('accessMessage');
+            const employeeCode = (input.value || '').trim();
+
+            message.className = 'message';
+            message.textContent = '';
+
+            fetch('/api/access/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ employee_code: employeeCode })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(result => {
+                if (!result.ok) {
+                    message.className = 'message error';
+                    message.textContent = result.data.error;
+                    return;
+                }
+
+                message.className = 'message success';
+                message.textContent = result.data.message;
+                window.setTimeout(() => {
+                    window.location.reload();
+                }, 350);
+            })
+            .catch(error => {
+                message.className = 'message error';
+                message.textContent = 'Login failed: ' + error.message;
+            });
+        }
+
+        function logoutAccess() {
+            fetch('/api/access/logout', {
+                method: 'POST'
+            })
+            .then(() => {
+                window.location.href = '/';
+            })
+            .catch(error => {
+                window.alert('Logout failed: ' + error.message);
+            });
+        }
+
+        const employeeCodeInput = document.getElementById('employeeCode');
+        if (employeeCodeInput) {
+            employeeCodeInput.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 8);
+            });
+
+            employeeCodeInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    loginWithEmployeeCode();
+                }
+            });
+        }
+    </script>
 </body>
 </html>

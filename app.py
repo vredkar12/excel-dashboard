@@ -1,7 +1,8 @@
-from flask import Flask, render_template, jsonify, request, session
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import pandas as pd
 import os
 from datetime import datetime
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-this-secret-before-production")
@@ -14,7 +15,7 @@ UPLOAD_ADMIN_PASSWORD = os.environ.get("UPLOAD_ADMIN_PASSWORD", "")
 def create_sample_excel():
     if not os.path.exists(EXCEL_FILE):
         sample_data = {
-            'Employee Code': ['EMP001', 'EMP002', 'EMP003', 'EMP004', 'EMP005'],
+            'Employee Code': ['10000001', '10000002', '10000003', '10000004', '10000005'],
             'Employee Name': ['John Smith', 'Jane Doe', 'Mike Johnson', 'Sarah Williams', 'Tom Brown'],
             'Reporting Manager': ['Manager A', 'Manager A', 'Manager B', 'Manager B', 'Manager A'],
             'Store Name': ['Store 1', 'Store 2', 'Store 1', 'Store 3', 'Store 2'],
@@ -40,10 +41,88 @@ ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def normalize_employee_code(value):
+    return ''.join(ch for ch in str(value).strip() if ch.isdigit())
+
+def has_dashboard_access():
+    return bool(session.get("employee_access"))
+
 def is_upload_admin():
     return session.get("can_upload") is True
 
+def employee_code_exists(employee_code):
+    if not os.path.exists(EXCEL_FILE):
+        return False
+
+    normalized_code = normalize_employee_code(employee_code)
+    if len(normalized_code) != 8:
+        return False
+
+    try:
+        excel_file = pd.ExcelFile(EXCEL_FILE)
+        for sheet_name in excel_file.sheet_names:
+            df = pd.read_excel(excel_file, sheet_name=sheet_name, dtype=str)
+            if 'Employee Code' not in df.columns:
+                continue
+
+            codes = df['Employee Code'].fillna('').map(normalize_employee_code)
+            if (codes == normalized_code).any():
+                return True
+    except Exception:
+        return False
+
+    return False
+
+def dashboard_required(route_handler):
+    @wraps(route_handler)
+    def wrapped(*args, **kwargs):
+        if not has_dashboard_access():
+            return redirect(url_for('index'))
+        return route_handler(*args, **kwargs)
+    return wrapped
+
+def dashboard_api_required(route_handler):
+    @wraps(route_handler)
+    def wrapped(*args, **kwargs):
+        if not has_dashboard_access():
+            return jsonify({"error": "Employee code verification required."}), 401
+        return route_handler(*args, **kwargs)
+    return wrapped
+
+@app.route('/api/access/status')
+def access_status():
+    """Return whether the current session has dashboard access."""
+    return jsonify({
+        "has_access": has_dashboard_access(),
+        "employee_code": session.get("employee_code", "")
+    })
+
+@app.route('/api/access/login', methods=['POST'])
+def access_login():
+    """Validate employee code before allowing dashboard access."""
+    payload = request.get_json(silent=True) or {}
+    employee_code = normalize_employee_code(payload.get("employee_code", ""))
+
+    if len(employee_code) != 8:
+        return jsonify({"error": "Enter a valid 8-digit employee code."}), 400
+
+    if not employee_code_exists(employee_code):
+        return jsonify({"error": "Employee code not found. Please check and try again."}), 401
+
+    session["employee_access"] = True
+    session["employee_code"] = employee_code
+    return jsonify({"success": True, "message": "Access granted."})
+
+@app.route('/api/access/logout', methods=['POST'])
+def access_logout():
+    """Clear dashboard access for the current session."""
+    session.pop("employee_access", None)
+    session.pop("employee_code", None)
+    session.pop("can_upload", None)
+    return jsonify({"success": True})
+
 @app.route('/api/admin/status')
+@dashboard_api_required
 def admin_status():
     """Return whether upload is configured and the current user can upload."""
     return jsonify({
@@ -52,6 +131,7 @@ def admin_status():
     })
 
 @app.route('/api/admin/login', methods=['POST'])
+@dashboard_api_required
 def admin_login():
     """Authenticate an upload admin for the current session."""
     if not UPLOAD_ADMIN_PASSWORD:
@@ -67,12 +147,14 @@ def admin_login():
     return jsonify({"success": True, "message": "Upload access granted."})
 
 @app.route('/api/admin/logout', methods=['POST'])
+@dashboard_api_required
 def admin_logout():
     """Remove upload admin access for the current session."""
     session.pop("can_upload", None)
     return jsonify({"success": True})
 
 @app.route('/api/upload', methods=['POST'])
+@dashboard_api_required
 def upload_file():
     """Handle file upload to update Excel data"""
     try:
@@ -134,20 +216,27 @@ def read_excel_data():
 @app.route('/')
 def index():
     """Master dashboard page"""
-    return render_template('home.html')
+    return render_template(
+        'home.html',
+        has_access=has_dashboard_access(),
+        employee_code=session.get("employee_code", "")
+    )
 
 @app.route('/e-nomination-pendancy')
+@dashboard_required
 def e_nomination_pendancy():
     """E Nomination pendancy dashboard page"""
     return render_template('index.html')
 
 @app.route('/api/data')
+@dashboard_api_required
 def get_data():
     """API endpoint to get Excel data"""
     data = read_excel_data()
     return jsonify(data)
 
 @app.route('/api/summary')
+@dashboard_api_required
 def get_summary():
     """API endpoint to get summary statistics"""
     try:
