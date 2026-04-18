@@ -158,7 +158,6 @@ def build_pf_analytics(excel_path):
         "hrbp": {"label": "HRBP", "column": "HRBP", "counts": {}},
         "reporting_manager": {"label": "Reporting Manager", "column": "Reporting Manager", "counts": {}},
         "gender": {"label": "Gender", "column": "Gender", "counts": {}},
-        "marital_status": {"label": "Marital Status", "column": "Marital Status", "counts": {}},
     }
 
     if not os.path.exists(excel_path):
