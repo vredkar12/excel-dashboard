@@ -135,12 +135,81 @@ def get_status_column(columns):
             return column
     return None
 
-def build_dashboard_analytics(excel_path):
+def normalize_status_value(value):
+    normalized = str(value).strip().lower()
+    mapping = {
+        'completed': 'Completed',
+        'pending': 'Pending',
+        'yes': 'Yes',
+        'no': 'No',
+    }
+    return mapping.get(normalized, '')
+
+def build_pf_analytics(excel_path):
     analytics = {
         "total_rows": 0,
         "sheets": [],
-        "status_counts": {}
+        "charts": []
     }
+    status_counts = {"Completed": 0, "Pending": 0, "Yes": 0, "No": 0}
+    hrbp_pending_counts = {}
+
+    if not os.path.exists(excel_path):
+        return analytics
+
+    excel_file = pd.ExcelFile(excel_path)
+    for sheet_name in excel_file.sheet_names:
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        df = df.fillna('')
+        row_count = len(df)
+        analytics["total_rows"] += row_count
+        analytics["sheets"].append({
+            "name": sheet_name,
+            "row_count": row_count
+        })
+
+        hrbp_column = next((column for column in df.columns if str(column).strip().lower() == 'hrbp'), None)
+        pf_pending_column = next((column for column in df.columns if 'pendingmination pendancy' in str(column).strip().lower() or 'nomination pendancy' in str(column).strip().lower()), None)
+
+        for column in df.columns:
+            if str(column).strip().lower() in {'employee code', 'employee name', 'reporting manager', 'store name', 'cluster region', 'employee uan no', 'employee member id', 'gender', 'date of joining', 'marital status', 'hrbp', 'remark', 'remark added by'}:
+                continue
+
+            for value in df[column]:
+                normalized = normalize_status_value(value)
+                if normalized:
+                    status_counts[normalized] += 1
+
+        if hrbp_column and pf_pending_column:
+            for _, row in df.iterrows():
+                if is_pending_like(row.get(pf_pending_column, '')):
+                    hrbp = str(row.get(hrbp_column, '')).strip() or 'Unassigned'
+                    hrbp_pending_counts[hrbp] = hrbp_pending_counts.get(hrbp, 0) + 1
+
+    analytics["sheets"].sort(key=lambda item: item["name"])
+    analytics["charts"] = [
+        {
+            "label": "PF Status Mix",
+            "counts": {key: value for key, value in status_counts.items() if value > 0}
+        },
+        {
+            "label": "PF Pendancy HRBP Wise",
+            "counts": dict(sorted(hrbp_pending_counts.items(), key=lambda item: item[0].lower()))
+        }
+    ]
+    return analytics
+
+def is_pending_like(value):
+    normalized = str(value).strip().lower()
+    return normalized in {'pending', 'no', 'not done', 'pme not done', 'none', 'false', 'n', 'fail'}
+
+def build_pme_analytics(excel_path):
+    analytics = {
+        "total_rows": 0,
+        "sheets": [],
+        "charts": []
+    }
+    hrbp_pending_counts = {}
 
     if not os.path.exists(excel_path):
         return analytics
@@ -157,15 +226,34 @@ def build_dashboard_analytics(excel_path):
         })
 
         status_column = get_status_column(df.columns)
-        if status_column:
-            counts = df[status_column].astype(str).str.strip()
+        hrbp_column = next((column for column in df.columns if str(column).strip().lower() == 'hrbp'), None)
+        if status_column and hrbp_column:
+            filtered = df[df[status_column].map(is_pending_like)]
+            counts = filtered[hrbp_column].astype(str).str.strip()
             counts = counts[counts != '']
-            for status, count in counts.value_counts().items():
-                analytics["status_counts"][status] = analytics["status_counts"].get(status, 0) + int(count)
+            for hrbp, count in counts.value_counts().items():
+                hrbp_pending_counts[hrbp] = hrbp_pending_counts.get(hrbp, 0) + int(count)
 
     analytics["sheets"].sort(key=lambda item: item["name"])
-    analytics["status_counts"] = dict(sorted(analytics["status_counts"].items(), key=lambda item: item[0].lower()))
+    analytics["charts"] = [
+        {
+            "label": "PME Pendancy HRBP Wise",
+            "counts": dict(sorted(hrbp_pending_counts.items(), key=lambda item: item[0].lower()))
+        }
+    ]
     return analytics
+
+def build_dashboard_analytics(dashboard_slug, excel_path):
+    if dashboard_slug == 'e-nomination-pendancy':
+        return build_pf_analytics(excel_path)
+    if dashboard_slug == 'pme-dashboard':
+        return build_pme_analytics(excel_path)
+
+    return {
+        "total_rows": 0,
+        "sheets": [],
+        "charts": []
+    }
 
 def employee_code_exists(employee_code):
     normalized_code = normalize_employee_code(employee_code)
@@ -495,7 +583,7 @@ def analytics_overview():
     for slug, dashboard in DASHBOARDS.items():
         dashboards[slug] = {
             "title": dashboard["title"],
-            "analytics": build_dashboard_analytics(dashboard["file"])
+            "analytics": build_dashboard_analytics(slug, dashboard["file"])
         }
 
     return jsonify({

@@ -254,6 +254,17 @@
             margin-top: 18px;
         }
 
+        .chart-block {
+            width: 100%;
+            padding-top: 8px;
+            border-top: 1px solid rgba(82, 96, 109, 0.12);
+        }
+
+        .chart-block:first-child {
+            padding-top: 0;
+            border-top: none;
+        }
+
         .pie-chart {
             width: 220px;
             height: 220px;
@@ -506,14 +517,27 @@
 
         function renderAnalyticsCard(slug, dashboard) {
             const analytics = dashboard.analytics || {};
-            const entries = Object.entries(analytics.status_counts || {});
-            const colors = getChartColors();
-
-            const legendHtml = entries.length
-                ? entries.map(([label, count], index) => `<div class="legend-item"><span class="legend-label"><span class="legend-dot" style="background:${colors[index % colors.length]}"></span><span>${escapeHtml(label)}</span></span><strong>${count}</strong></div>`).join('')
-                : '<div class="subtle">No status column found in this dashboard file.</div>';
-
             const sheets = (analytics.sheets || []).map(sheet => `${escapeHtml(sheet.name)}: ${sheet.row_count}`).join(' | ');
+            const charts = Array.isArray(analytics.charts) ? analytics.charts : [];
+            const chartHtml = charts.length
+                ? charts.map(chart => {
+                    const entries = Object.entries(chart.counts || {});
+                    const colors = getChartColors();
+                    const legendHtml = entries.length
+                        ? entries.map(([label, count], index) => `<div class="legend-item"><span class="legend-label"><span class="legend-dot" style="background:${colors[index % colors.length]}"></span><span>${escapeHtml(label)}</span></span><strong>${count}</strong></div>`).join('')
+                        : '<div class="subtle">No data available for this chart yet.</div>';
+
+                    return `
+                        <div class="chart-block">
+                            <div class="subtle"><strong>${escapeHtml(chart.label || 'Analytics')}</strong></div>
+                            <div class="chart-wrap">
+                                ${buildPieChartSvg(chart.counts || {})}
+                                <div class="chart-legend">${legendHtml}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+                : '<div class="subtle">No analytics available yet.</div>';
 
             return `
                 <article class="analytics-card">
@@ -522,10 +546,7 @@
                         Total rows: <strong>${analytics.total_rows || 0}</strong>
                         ${sheets ? `<br><span class="subtle">Sheets: ${sheets}</span>` : ''}
                     </div>
-                    <div class="chart-wrap">
-                        ${buildPieChartSvg(analytics.status_counts || {})}
-                        <div class="chart-legend">${legendHtml}</div>
-                    </div>
+                    <div class="chart-wrap">${chartHtml}</div>
                 </article>
             `;
         }
