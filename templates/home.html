@@ -354,11 +354,12 @@
                 <div class="input-stack">
                     <div class="actions">
                         <input type="file" id="activeCodesInput" class="file-input" accept=".xlsx,.xls,.csv" onchange="uploadActiveCodes()">
+                        <button class="secondary-btn" onclick="downloadActiveCodesTemplate()">Download Template</button>
                         <button class="primary-btn" onclick="document.getElementById('activeCodesInput').click()">Upload Active Employee List</button>
                         <button class="secondary-btn" onclick="logoutAdmin()">Logout Admin</button>
                     </div>
                     <div class="subtle">
-                        Upload a file with an `Employee Code` column containing valid 8-digit employee codes.
+                        Use the template file and keep the `Employee Code` column exactly as shown. Only 8-digit employee codes will be accepted.
                     </div>
                     <div class="subtle">
                         Active list status:
@@ -513,6 +514,10 @@
                 message.className = 'message error';
                 message.textContent = 'Upload failed: ' + error.message;
             });
+        }
+
+        function downloadActiveCodesTemplate() {
+            window.location.href = '/api/active-codes/template';
         }
 
         function logoutAccess() {

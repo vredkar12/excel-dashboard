@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, Response
 import pandas as pd
 import os
 from datetime import datetime
@@ -253,6 +253,29 @@ def upload_active_employee_codes():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/active-codes/template')
+def download_active_employee_template():
+    """Download a template file for active employee code uploads."""
+    if not UPLOAD_ADMIN_PASSWORD:
+        return jsonify({"error": "Upload access is disabled until an admin password is configured."}), 503
+
+    if not is_upload_admin():
+        return jsonify({"error": "Admin login required to download the active employee template."}), 403
+
+    csv_content = "\n".join([
+        "Employee Code,Employee Name",
+        "10000001,Sample Employee 1",
+        "10000002,Sample Employee 2"
+    ])
+
+    return Response(
+        csv_content,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=active_employee_codes_template.csv"
+        }
+    )
 
 @app.route('/api/upload', methods=['POST'])
 @dashboard_api_required
