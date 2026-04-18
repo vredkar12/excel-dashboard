@@ -147,13 +147,30 @@ def normalize_status_value(value):
     }
     return mapping.get(normalized, '')
 
+def summarize_case_counts(series):
+    counts = {}
+    for value in series:
+        text = str(value).strip()
+        if not text:
+            continue
+        normalized = normalize_status_value(text)
+        key = normalized if normalized else text
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: item[0].lower()))
+
 def build_pf_analytics(excel_path):
     analytics = {
         "total_rows": 0,
         "sheets": [],
         "charts": []
     }
-    status_counts = {"Completed": 0, "Pending": 0, "Yes": 0, "No": 0}
+    case_breakdowns = {
+        "pf_pendancy": {"label": "E Pendingmination pendancy", "column": "E Pendingmination pendancy", "counts": {}},
+        "aadhaar_verified": {"label": "Is AADHAAR Verified", "column": "Is AADHAAR Verified", "counts": {}},
+        "face_authentication": {"label": "Face Authentication Completed", "column": "Face Authentication Completed", "counts": {}},
+        "pan_kyc": {"label": "PAN KYC", "column": "PAN KYC", "counts": {}},
+        "bank_kyc": {"label": "Bank Account No, IFSC Code KYC", "column": "Bank Account No, IFSC Code KYC", "counts": {}},
+    }
     pending_breakdowns = {
         "store_name": {"label": "Stores", "column": "Store Name", "counts": {}},
         "cluster_region": {"label": "Cluster", "column": "Cluster Region", "counts": {}},
@@ -178,14 +195,11 @@ def build_pf_analytics(excel_path):
 
         pf_pending_column = next((column for column in df.columns if 'pendingmination pendancy' in str(column).strip().lower() or 'nomination pendancy' in str(column).strip().lower()), None)
 
-        for column in df.columns:
-            if str(column).strip().lower() in {'employee code', 'employee name', 'reporting manager', 'store name', 'cluster region', 'employee uan no', 'employee member id', 'gender', 'date of joining', 'marital status', 'hrbp', 'remark', 'remark added by'}:
-                continue
-
-            for value in df[column]:
-                normalized = normalize_status_value(value)
-                if normalized:
-                    status_counts[normalized] += 1
+        for breakdown in case_breakdowns.values():
+            if breakdown["column"] in df.columns:
+                column_counts = summarize_case_counts(df[breakdown["column"]])
+                for key, value in column_counts.items():
+                    breakdown["counts"][key] = breakdown["counts"].get(key, 0) + value
 
         if pf_pending_column:
             for _, row in df.iterrows():
@@ -199,8 +213,17 @@ def build_pf_analytics(excel_path):
     analytics["sheets"].sort(key=lambda item: item["name"])
     analytics["charts"] = [
         {
-            "label": "PF Status Mix",
-            "counts": {key: value for key, value in status_counts.items() if value > 0}
+            "label": "PF Case Wise Analytics",
+            "type": "dropdown-pie",
+            "default_key": "pf_pendancy",
+            "breakdowns": {
+                key: {
+                    "label": value["label"],
+                    "counts": dict(sorted(value["counts"].items(), key=lambda item: item[0].lower()))
+                }
+                for key, value in case_breakdowns.items()
+                if value["counts"]
+            }
         },
         {
             "label": "PF Pendancy Breakdown",
