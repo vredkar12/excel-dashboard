@@ -233,6 +233,60 @@
             margin-top: 24px;
         }
 
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
+            margin-top: 24px;
+        }
+
+        .analytics-card {
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 24px;
+        }
+
+        .chart-wrap {
+            display: grid;
+            justify-items: center;
+            gap: 14px;
+            margin-top: 18px;
+        }
+
+        .pie-chart {
+            width: 220px;
+            height: 220px;
+        }
+
+        .chart-legend {
+            display: grid;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .legend-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+        }
+
+        .legend-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex: 0 0 auto;
+        }
+
         .info-card {
             background: rgba(255, 255, 255, 0.84);
             border: 1px solid var(--border);
@@ -322,6 +376,18 @@
                     <button class="secondary-btn" onclick="logoutAccess()">Logout</button>
                 </div>
             </div>
+
+            <div class="dashboard-card" style="margin-top: 24px;">
+                <h2 class="section-title">Detailed Analytics</h2>
+                <p class="section-copy">
+                    Status distribution for both dashboards appears here after login so you can compare the current case mix at a glance.
+                </p>
+                <div id="analyticsGrid" class="analytics-grid">
+                    <div class="analytics-card">
+                        <div class="subtle">Loading analytics...</div>
+                    </div>
+                </div>
+            </div>
             {% endif %}
 
             <div class="admin-card" style="margin-top: 24px;">
@@ -394,6 +460,102 @@
     </main>
 
     <script>
+        const hasAccess = {{ has_access|tojson }};
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getChartColors() {
+            return ['#b56576', '#6d597a', '#e56b6f', '#355070', '#43aa8b', '#f4a261', '#577590', '#bc4749'];
+        }
+
+        function buildPieChartSvg(statusCounts) {
+            const entries = Object.entries(statusCounts || {});
+            if (!entries.length) {
+                return '<div class="subtle">No status data available yet.</div>';
+            }
+
+            const colors = getChartColors();
+            const total = entries.reduce((sum, [, count]) => sum + count, 0);
+            const radius = 90;
+            const center = 110;
+            let currentAngle = -Math.PI / 2;
+
+            const paths = entries.map(([label, count], index) => {
+                const sliceAngle = (count / total) * Math.PI * 2;
+                const x1 = center + radius * Math.cos(currentAngle);
+                const y1 = center + radius * Math.sin(currentAngle);
+                const endAngle = currentAngle + sliceAngle;
+                const x2 = center + radius * Math.cos(endAngle);
+                const y2 = center + radius * Math.sin(endAngle);
+                const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+                const color = colors[index % colors.length];
+                currentAngle = endAngle;
+
+                return `<path d="M ${center} ${center} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${color}"></path>`;
+            }).join('');
+
+            return `<svg class="pie-chart" viewBox="0 0 220 220" role="img" aria-label="Status distribution pie chart">${paths}<circle cx="110" cy="110" r="44" fill="white"></circle><text x="110" y="104" text-anchor="middle" font-size="14" fill="#52606d">Cases</text><text x="110" y="124" text-anchor="middle" font-size="22" font-weight="700" fill="#1f2933">${total}</text></svg>`;
+        }
+
+        function renderAnalyticsCard(slug, dashboard) {
+            const analytics = dashboard.analytics || {};
+            const entries = Object.entries(analytics.status_counts || {});
+            const colors = getChartColors();
+
+            const legendHtml = entries.length
+                ? entries.map(([label, count], index) => `<div class="legend-item"><span class="legend-label"><span class="legend-dot" style="background:${colors[index % colors.length]}"></span><span>${escapeHtml(label)}</span></span><strong>${count}</strong></div>`).join('')
+                : '<div class="subtle">No status column found in this dashboard file.</div>';
+
+            const sheets = (analytics.sheets || []).map(sheet => `${escapeHtml(sheet.name)}: ${sheet.row_count}`).join(' | ');
+
+            return `
+                <article class="analytics-card">
+                    <div class="info-title">${escapeHtml(dashboard.title)}</div>
+                    <div class="section-copy" style="margin-bottom: 0;">
+                        Total rows: <strong>${analytics.total_rows || 0}</strong>
+                        ${sheets ? `<br><span class="subtle">Sheets: ${sheets}</span>` : ''}
+                    </div>
+                    <div class="chart-wrap">
+                        ${buildPieChartSvg(analytics.status_counts || {})}
+                        <div class="chart-legend">${legendHtml}</div>
+                    </div>
+                </article>
+            `;
+        }
+
+        function loadAnalyticsOverview() {
+            if (!hasAccess) {
+                return;
+            }
+
+            const analyticsGrid = document.getElementById('analyticsGrid');
+            if (!analyticsGrid) {
+                return;
+            }
+
+            fetch('/api/analytics-overview')
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(result => {
+                    if (!result.ok) {
+                        analyticsGrid.innerHTML = `<div class="analytics-card"><div class="message error" style="display:block;">${escapeHtml(result.data.error || 'Failed to load analytics.')}</div></div>`;
+                        return;
+                    }
+
+                    const dashboards = result.data.dashboards || {};
+                    analyticsGrid.innerHTML = Object.entries(dashboards).map(([slug, dashboard]) => renderAnalyticsCard(slug, dashboard)).join('');
+                })
+                .catch(error => {
+                    analyticsGrid.innerHTML = `<div class="analytics-card"><div class="message error" style="display:block;">Analytics failed to load: ${escapeHtml(error.message)}</div></div>`;
+                });
+        }
+
         function loginWithEmployeeCode() {
             const input = document.getElementById('employeeCode');
             const message = document.getElementById('accessMessage');
@@ -554,6 +716,8 @@
                 }
             });
         }
+
+        loadAnalyticsOverview();
     </script>
 </body>
 </html>

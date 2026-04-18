@@ -128,6 +128,45 @@ def ensure_remark_columns(df):
         df['Remark Added By'] = ''
     return df
 
+def get_status_column(columns):
+    for column in columns:
+        normalized = str(column).strip().lower()
+        if 'status' in normalized:
+            return column
+    return None
+
+def build_dashboard_analytics(excel_path):
+    analytics = {
+        "total_rows": 0,
+        "sheets": [],
+        "status_counts": {}
+    }
+
+    if not os.path.exists(excel_path):
+        return analytics
+
+    excel_file = pd.ExcelFile(excel_path)
+    for sheet_name in excel_file.sheet_names:
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        df = df.fillna('')
+        row_count = len(df)
+        analytics["total_rows"] += row_count
+        analytics["sheets"].append({
+            "name": sheet_name,
+            "row_count": row_count
+        })
+
+        status_column = get_status_column(df.columns)
+        if status_column:
+            counts = df[status_column].astype(str).str.strip()
+            counts = counts[counts != '']
+            for status, count in counts.value_counts().items():
+                analytics["status_counts"][status] = analytics["status_counts"].get(status, 0) + int(count)
+
+    analytics["sheets"].sort(key=lambda item: item["name"])
+    analytics["status_counts"] = dict(sorted(analytics["status_counts"].items(), key=lambda item: item[0].lower()))
+    return analytics
+
 def employee_code_exists(employee_code):
     normalized_code = normalize_employee_code(employee_code)
     if len(normalized_code) != 8:
@@ -445,6 +484,24 @@ def index():
         active_codes_count=active_info["count"],
         active_codes_last_updated=active_info["last_updated"]
     )
+
+@app.route('/api/analytics-overview')
+def analytics_overview():
+    """Return analytics for all dashboards shown on the home page."""
+    if not has_dashboard_access():
+        return jsonify({"error": "Employee code verification required."}), 401
+
+    dashboards = {}
+    for slug, dashboard in DASHBOARDS.items():
+        dashboards[slug] = {
+            "title": dashboard["title"],
+            "analytics": build_dashboard_analytics(dashboard["file"])
+        }
+
+    return jsonify({
+        "dashboards": dashboards,
+        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
 
 @app.route('/<dashboard_slug>')
 @dashboard_required
