@@ -8,14 +8,26 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-this-secret-before-production")
 
 # Configuration
-EXCEL_FILE = "Beauty_PF Status_20260416.xlsx"
+DEFAULT_EXCEL_FILE = "Beauty_PF Status_20260416.xlsx"
+PME_EXCEL_FILE = "Beauty_PME Status_20260416.xlsx"
 ACTIVE_EMPLOYEE_XLSX_FILE = "Active_Employee_Codes.xlsx"
 ACTIVE_EMPLOYEE_CSV_FILE = "Active_Employee_Codes.csv"
 UPLOAD_ADMIN_PASSWORD = os.environ.get("UPLOAD_ADMIN_PASSWORD", "")
 
+DASHBOARDS = {
+    "e-nomination-pendancy": {
+        "title": "E Nomination pendancy",
+        "file": DEFAULT_EXCEL_FILE,
+    },
+    "pme-dashboard": {
+        "title": "PME Dashboard",
+        "file": PME_EXCEL_FILE,
+    },
+}
+
 # Create sample Excel file if it doesn't exist (for first deployment)
 def create_sample_excel():
-    if not os.path.exists(EXCEL_FILE):
+    if not os.path.exists(DEFAULT_EXCEL_FILE):
         sample_data = {
             'Employee Code': ['10000001', '10000002', '10000003', '10000004', '10000005'],
             'Employee Name': ['John Smith', 'Jane Doe', 'Mike Johnson', 'Sarah Williams', 'Tom Brown'],
@@ -30,8 +42,8 @@ def create_sample_excel():
             'Status': ['Pending', 'Completed', 'Pending', 'Completed', 'Yes']
         }
         df = pd.DataFrame(sample_data)
-        df.to_excel(EXCEL_FILE, index=False, sheet_name='Data')
-        print(f"Created sample Excel file: {EXCEL_FILE}")
+        df.to_excel(DEFAULT_EXCEL_FILE, index=False, sheet_name='Data')
+        print(f"Created sample Excel file: {DEFAULT_EXCEL_FILE}")
 
 # Initialize sample file on startup
 create_sample_excel()
@@ -102,6 +114,9 @@ def active_employee_list_info():
         "count": len(codes),
         "last_updated": last_updated
     }
+
+def get_dashboard_config(dashboard_slug):
+    return DASHBOARDS.get(dashboard_slug)
 
 def employee_code_exists(employee_code):
     normalized_code = normalize_employee_code(employee_code)
@@ -277,11 +292,15 @@ def download_active_employee_template():
         }
     )
 
-@app.route('/api/upload', methods=['POST'])
+@app.route('/api/upload/<dashboard_slug>', methods=['POST'])
 @dashboard_api_required
-def upload_file():
+def upload_file(dashboard_slug):
     """Handle file upload to update Excel data"""
     try:
+        dashboard = get_dashboard_config(dashboard_slug)
+        if not dashboard:
+            return jsonify({"error": "Unknown dashboard."}), 404
+
         if not UPLOAD_ADMIN_PASSWORD:
             return jsonify({"error": "Upload access is disabled until an admin password is configured."}), 503
 
@@ -298,7 +317,7 @@ def upload_file():
         
         if file and allowed_file(file.filename):
             # Save the file with the configured filename
-            file.save(EXCEL_FILE)
+            file.save(dashboard["file"])
             return jsonify({
                 "success": True,
                 "message": "File uploaded successfully",
@@ -310,14 +329,14 @@ def upload_file():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-def read_excel_data():
+def read_excel_data(excel_path):
     """Read and process Excel file data"""
     try:
-        if not os.path.exists(EXCEL_FILE):
+        if not os.path.exists(excel_path):
             return {"sheets": {}, "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message": "No data file. Upload an Excel file to get started."}
         
         # Read all sheets from Excel
-        excel_file = pd.ExcelFile(EXCEL_FILE)
+        excel_file = pd.ExcelFile(excel_path)
         sheets_data = {}
         
         for sheet_name in excel_file.sheet_names:
@@ -352,28 +371,43 @@ def index():
         active_codes_last_updated=active_info["last_updated"]
     )
 
-@app.route('/e-nomination-pendancy')
+@app.route('/<dashboard_slug>')
 @dashboard_required
-def e_nomination_pendancy():
-    """E Nomination pendancy dashboard page"""
-    return render_template('index.html')
+def dashboard_page(dashboard_slug):
+    """Dashboard page"""
+    dashboard = get_dashboard_config(dashboard_slug)
+    if not dashboard:
+        return redirect(url_for('index'))
+    return render_template(
+        'index.html',
+        dashboard_title=dashboard["title"],
+        dashboard_slug=dashboard_slug
+    )
 
-@app.route('/api/data')
+@app.route('/api/data/<dashboard_slug>')
 @dashboard_api_required
-def get_data():
+def get_data(dashboard_slug):
     """API endpoint to get Excel data"""
-    data = read_excel_data()
+    dashboard = get_dashboard_config(dashboard_slug)
+    if not dashboard:
+        return jsonify({"error": "Unknown dashboard."}), 404
+    data = read_excel_data(dashboard["file"])
     return jsonify(data)
 
-@app.route('/api/summary')
+@app.route('/api/summary/<dashboard_slug>')
 @dashboard_api_required
-def get_summary():
+def get_summary(dashboard_slug):
     """API endpoint to get summary statistics"""
     try:
-        if not os.path.exists(EXCEL_FILE):
+        dashboard = get_dashboard_config(dashboard_slug)
+        if not dashboard:
+            return jsonify({"error": "Unknown dashboard."}), 404
+
+        excel_path = dashboard["file"]
+        if not os.path.exists(excel_path):
             return jsonify({"sheets": [], "total_sheets": 0, "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         
-        excel_file = pd.ExcelFile(EXCEL_FILE)
+        excel_file = pd.ExcelFile(excel_path)
         summary = {
             "sheets": excel_file.sheet_names,
             "total_sheets": len(excel_file.sheet_names),
@@ -394,5 +428,5 @@ def get_summary():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"Starting Excel Dashboard on port {port}...")
-    print(f"Reading from: {EXCEL_FILE}")
+    print(f"Default dashboard file: {DEFAULT_EXCEL_FILE}")
     app.run(debug=False, host='0.0.0.0', port=port)

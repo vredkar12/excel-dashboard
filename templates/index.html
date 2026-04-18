@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E Nomination pendancy</title>
+    <title>{{ dashboard_title }}</title>
     <style>
         * {
             margin: 0;
@@ -364,7 +364,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>E Nomination pendancy</h1>
+            <h1>{{ dashboard_title }}</h1>
             <div class="status-bar">
                 <div class="status-item">
                     <span class="status-dot"></span>
@@ -452,6 +452,7 @@
     </div>
 
     <script>
+        const dashboardSlug = {{ dashboard_slug|tojson }};
         let currentSheet = '';
         let autoRefreshInterval;
         let allData = {};
@@ -553,7 +554,7 @@
         }
         
         function loadData() {
-            fetch('/api/data')
+            fetch(`/api/data/${dashboardSlug}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -779,7 +780,7 @@
             uploadMessage.className = 'upload-message';
             uploadMessage.textContent = 'Uploading...';
             
-            fetch('/api/upload', {
+            fetch(`/api/upload/${dashboardSlug}`, {
                 method: 'POST',
                 body: formData
             })
