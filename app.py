@@ -8,6 +8,29 @@ app = Flask(__name__)
 # Configuration
 EXCEL_FILE = "Beauty_PF Status_20260416.xlsx"
 
+# Create sample Excel file if it doesn't exist (for first deployment)
+def create_sample_excel():
+    if not os.path.exists(EXCEL_FILE):
+        sample_data = {
+            'Employee Code': ['EMP001', 'EMP002', 'EMP003', 'EMP004', 'EMP005'],
+            'Employee Name': ['John Smith', 'Jane Doe', 'Mike Johnson', 'Sarah Williams', 'Tom Brown'],
+            'Reporting Manager': ['Manager A', 'Manager A', 'Manager B', 'Manager B', 'Manager A'],
+            'Store Name': ['Store 1', 'Store 2', 'Store 1', 'Store 3', 'Store 2'],
+            'Cluster Region': ['North', 'South', 'North', 'East', 'South'],
+            'Employee UAN No': ['UAN001', 'UAN002', 'UAN003', 'UAN004', 'UAN005'],
+            'Employee Member ID': ['MEM001', 'MEM002', 'MEM003', 'MEM004', 'MEM005'],
+            'Gender': ['Male', 'Female', 'Male', 'Female', 'Male'],
+            'Date of Joining': ['2024-01-01', '2024-02-01', '2024-03-01', '2024-04-01', '2024-05-01'],
+            'Marital Status': ['Single', 'Married', 'Single', 'Married', 'Single'],
+            'Status': ['Pending', 'Completed', 'Pending', 'Completed', 'Yes']
+        }
+        df = pd.DataFrame(sample_data)
+        df.to_excel(EXCEL_FILE, index=False, sheet_name='Data')
+        print(f"Created sample Excel file: {EXCEL_FILE}")
+
+# Initialize sample file on startup
+create_sample_excel()
+
 # Configure upload folder
 UPLOAD_FOLDER = '.'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
@@ -105,6 +128,7 @@ def get_summary():
         return jsonify({"sheets": [], "total_sheets": 0, "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
 
 if __name__ == '__main__':
-    print(f"Starting Excel Dashboard...")
+    port = int(os.environ.get('PORT', 5000))
+    print(f"Starting Excel Dashboard on port {port}...")
     print(f"Reading from: {EXCEL_FILE}")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)
