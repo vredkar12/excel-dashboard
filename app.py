@@ -78,16 +78,12 @@ def get_code_column(columns):
             return column
     return None
 
-def read_active_employee_codes():
-    active_file = get_active_employee_file()
-    if not active_file:
-        return set()
-
+def read_employee_codes_from_file(file_path):
     try:
-        if active_file.lower().endswith('.csv'):
-            df = pd.read_csv(active_file, dtype=str)
+        if file_path.lower().endswith('.csv'):
+            df = pd.read_csv(file_path, dtype=str)
         else:
-            df = pd.read_excel(active_file, dtype=str)
+            df = pd.read_excel(file_path, dtype=str)
 
         code_column = get_code_column(df.columns)
         if not code_column:
@@ -101,6 +97,12 @@ def read_active_employee_codes():
         return codes
     except Exception:
         return set()
+
+def read_active_employee_codes():
+    active_file = get_active_employee_file()
+    if not active_file:
+        return set()
+    return read_employee_codes_from_file(active_file)
 
 def active_employee_list_info():
     codes = read_active_employee_codes()
@@ -276,15 +278,16 @@ def employee_code_exists(employee_code):
     if len(normalized_code) != 8:
         return False
 
-    active_codes = read_active_employee_codes()
-    if active_codes:
+    active_file = get_active_employee_file()
+    if active_file:
+        active_codes = read_active_employee_codes()
         return normalized_code in active_codes
 
-    if not os.path.exists(EXCEL_FILE):
+    if not os.path.exists(DEFAULT_EXCEL_FILE):
         return False
 
     try:
-        excel_file = pd.ExcelFile(EXCEL_FILE)
+        excel_file = pd.ExcelFile(DEFAULT_EXCEL_FILE)
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name, dtype=str)
             code_column = get_code_column(df.columns)
@@ -402,16 +405,22 @@ def upload_active_employee_codes():
 
         extension = file.filename.rsplit('.', 1)[1].lower()
         target_file = ACTIVE_EMPLOYEE_XLSX_FILE if extension != 'csv' else ACTIVE_EMPLOYEE_CSV_FILE
+        temp_file = f"{target_file}.tmp"
 
-        file.save(target_file)
+        file.save(temp_file)
+        active_codes = read_employee_codes_from_file(temp_file)
+        if not active_codes:
+            os.remove(temp_file)
+            return jsonify({"error": "No valid 8-digit employee codes were found in the uploaded file."}), 400
+
+        if os.path.exists(target_file):
+            os.remove(target_file)
+        os.replace(temp_file, target_file)
+
         if target_file == ACTIVE_EMPLOYEE_XLSX_FILE and os.path.exists(ACTIVE_EMPLOYEE_CSV_FILE):
             os.remove(ACTIVE_EMPLOYEE_CSV_FILE)
         if target_file == ACTIVE_EMPLOYEE_CSV_FILE and os.path.exists(ACTIVE_EMPLOYEE_XLSX_FILE):
             os.remove(ACTIVE_EMPLOYEE_XLSX_FILE)
-
-        active_codes = read_active_employee_codes()
-        if not active_codes:
-            return jsonify({"error": "No valid 8-digit employee codes were found in the uploaded file."}), 400
 
         return jsonify({
             "success": True,
