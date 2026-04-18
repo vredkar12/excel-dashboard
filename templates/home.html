@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tira stores HR Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-start: #f7efe5;
+            --bg-end: #d8e2dc;
+            --panel: rgba(255, 255, 255, 0.88);
+            --text: #1f2933;
+            --muted: #52606d;
+            --accent: #b56576;
+            --accent-dark: #8f4b59;
+            --shadow: 0 24px 60px rgba(31, 41, 51, 0.16);
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 32%),
+                linear-gradient(135deg, var(--bg-start), var(--bg-end));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .shell {
+            width: min(920px, 100%);
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .hero {
+            padding: 56px 48px;
+            display: grid;
+            gap: 28px;
+            background:
+                linear-gradient(125deg, rgba(181, 101, 118, 0.14), rgba(255, 255, 255, 0)),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.95));
+        }
+
+        .eyebrow {
+            font-size: 13px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        h1 {
+            font-size: clamp(36px, 6vw, 58px);
+            line-height: 1.05;
+            max-width: 620px;
+        }
+
+        .description {
+            max-width: 640px;
+            font-size: 18px;
+            line-height: 1.7;
+            color: var(--muted);
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .dashboard-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 28px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            font-size: 17px;
+            font-weight: 600;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 14px 32px rgba(181, 101, 118, 0.28);
+        }
+
+        .dashboard-link:hover {
+            background: var(--accent-dark);
+            transform: translateY(-2px);
+        }
+
+        .helper {
+            font-size: 15px;
+            color: var(--muted);
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 18px;
+            padding: 0 48px 48px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(82, 96, 109, 0.12);
+            border-radius: 22px;
+            padding: 22px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .card-copy {
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--text);
+        }
+
+        @media (max-width: 640px) {
+            .hero {
+                padding: 36px 24px;
+            }
+
+            .cards {
+                padding: 0 24px 24px;
+            }
+
+            .dashboard-link {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div class="eyebrow">HR Control Center</div>
+            <h1>Tira stores HR Dashboard</h1>
+            <p class="description">
+                Open the available HR tracker dashboard below. Team members can view data, and authorized admins can manage master data from inside the tracker.
+            </p>
+            <div class="actions">
+                <a class="dashboard-link" href="/e-nomination-pendancy">E Nomination pendancy</a>
+                <div class="helper">Choose a dashboard to continue.</div>
+            </div>
+        </section>
+
+        <section class="cards">
+            <article class="card">
+                <div class="card-title">Viewer Access</div>
+                <div class="card-copy">Anyone with the link can open the dashboard and review the live data.</div>
+            </article>
+            <article class="card">
+                <div class="card-title">Admin Uploads</div>
+                <div class="card-copy">Master data upload stays protected behind the admin login on the dashboard page.</div>
+            </article>
+            <article class="card">
+                <div class="card-title">Live Updates</div>
+                <div class="card-copy">The tracker keeps its existing refresh, filters, and upload flow after you enter the dashboard.</div>
+            </article>
+        </section>
+    </main>
+</body>
+</html>

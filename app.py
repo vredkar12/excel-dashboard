@@ -133,7 +133,12 @@ def read_excel_data():
 
 @app.route('/')
 def index():
-    """Main dashboard page"""
+    """Master dashboard page"""
+    return render_template('home.html')
+
+@app.route('/e-nomination-pendancy')
+def e_nomination_pendancy():
+    """E Nomination pendancy dashboard page"""
     return render_template('index.html')
 
 @app.route('/api/data')
