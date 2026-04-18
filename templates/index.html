@@ -359,6 +359,62 @@
             color: #999;
             font-size: 12px;
         }
+
+        .remark-cell {
+            min-width: 280px;
+        }
+
+        .remark-editor {
+            display: grid;
+            gap: 8px;
+        }
+
+        .remark-textarea {
+            width: 100%;
+            min-height: 92px;
+            resize: vertical;
+            padding: 10px 12px;
+            border: 1px solid #d7dce8;
+            border-radius: 8px;
+            font: inherit;
+            color: #333;
+        }
+
+        .remark-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .remark-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .remark-save-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .remark-save-btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        .remark-error {
+            color: #c62828;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -458,6 +514,19 @@
         let allData = {};
         let filterOptions = {};
         let uploadConfigured = false;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function countWords(text) {
+            return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+        }
         
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -721,10 +790,17 @@
             const empNameIndex = columns.findIndex(col => col.toLowerCase().includes('employee') && col.toLowerCase().includes('name'));
             
             // Reorder: move Employee Name to second position if found
-            let orderedColumns = [...columns];
+            let orderedColumns = columns.filter(col => col !== '_row_id');
             if (empNameIndex > 1) {
                 const empCol = orderedColumns.splice(empNameIndex, 1)[0];
                 orderedColumns.splice(1, 0, empCol);
+            }
+
+            if (!orderedColumns.includes('Remark')) {
+                orderedColumns.push('Remark');
+            }
+            if (!orderedColumns.includes('Remark Added By')) {
+                orderedColumns.push('Remark Added By');
             }
             
             let html = '<table><thead><tr>';
@@ -736,10 +812,18 @@
             sheetData.data.forEach(row => {
                 html += '<tr>';
                 orderedColumns.forEach(col => {
-                    const cellValue = row[col];
+                    const cellValue = row[col] ?? '';
+                    if (col === 'Remark') {
+                        const rowId = row['_row_id'];
+                        const escapedValue = escapeHtml(cellValue);
+                        const wordCount = countWords(cellValue);
+                        html += `<td class="remark-cell"><div class="remark-editor"><textarea class="remark-textarea" data-row-id="${rowId}" data-sheet-name="${escapeHtml(currentSheet)}" oninput="handleRemarkInput(this)">${escapedValue}</textarea><div class="remark-meta"><span class="remark-word-count">${wordCount}/500 words</span><button class="remark-save-btn" onclick="saveRemark(this)" data-row-id="${rowId}" data-sheet-name="${escapeHtml(currentSheet)}">Save Remark</button></div><div class="remark-error"></div></div></td>`;
+                        return;
+                    }
+
                     const highlightClass = getCellHighlight(cellValue);
                     const classAttr = highlightClass ? `class="${highlightClass}"` : '';
-                    html += `<td ${classAttr}>${cellValue}</td>`;
+                    html += `<td ${classAttr}>${escapeHtml(cellValue)}</td>`;
                 });
                 html += '</tr>';
             });
@@ -765,7 +849,70 @@
         function refreshData() {
             loadData();
         }
-        
+
+        function handleRemarkInput(textarea) {
+            const editor = textarea.closest('.remark-editor');
+            const wordCount = countWords(textarea.value);
+            editor.querySelector('.remark-word-count').textContent = `${wordCount}/500 words`;
+            const errorNode = editor.querySelector('.remark-error');
+            const saveBtn = editor.querySelector('.remark-save-btn');
+
+            if (wordCount > 500) {
+                errorNode.textContent = 'Remark cannot exceed 500 words.';
+                saveBtn.disabled = true;
+            } else {
+                errorNode.textContent = '';
+                saveBtn.disabled = false;
+            }
+        }
+
+        function saveRemark(button) {
+            const rowId = button.dataset.rowId;
+            const sheetName = button.dataset.sheetName;
+            const editor = button.closest('.remark-editor');
+            const textarea = editor.querySelector('.remark-textarea');
+            const errorNode = editor.querySelector('.remark-error');
+            const wordCount = countWords(textarea.value);
+
+            if (wordCount > 500) {
+                errorNode.textContent = 'Remark cannot exceed 500 words.';
+                return;
+            }
+
+            button.disabled = true;
+            errorNode.textContent = '';
+            const previousLabel = button.textContent;
+            button.textContent = 'Saving...';
+
+            fetch(`/api/remarks/${dashboardSlug}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sheet_name: sheetName,
+                    row_id: rowId,
+                    remark: textarea.value
+                })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(result => {
+                if (!result.ok) {
+                    errorNode.textContent = result.data.error;
+                    return;
+                }
+
+                loadData();
+            })
+            .catch(error => {
+                errorNode.textContent = 'Save failed: ' + error.message;
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = previousLabel;
+            });
+        }
+
         function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];

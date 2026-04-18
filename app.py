@@ -118,6 +118,16 @@ def active_employee_list_info():
 def get_dashboard_config(dashboard_slug):
     return DASHBOARDS.get(dashboard_slug)
 
+def count_words(text):
+    return len([word for word in str(text).strip().split() if word])
+
+def ensure_remark_columns(df):
+    if 'Remark' not in df.columns:
+        df['Remark'] = ''
+    if 'Remark Added By' not in df.columns:
+        df['Remark Added By'] = ''
+    return df
+
 def employee_code_exists(employee_code):
     normalized_code = normalize_employee_code(employee_code)
     if len(normalized_code) != 8:
@@ -343,6 +353,8 @@ def read_excel_data(excel_path):
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             # Convert to dict and handle NaN values
             df = df.fillna('')
+            df = ensure_remark_columns(df)
+            df['_row_id'] = df.index
             sheets_data[sheet_name] = {
                 "columns": df.columns.tolist(),
                 "data": df.to_dict(orient="records"),
@@ -355,6 +367,69 @@ def read_excel_data(excel_path):
         }
     except Exception as e:
         return {"error": str(e)}
+
+@app.route('/api/remarks/<dashboard_slug>', methods=['POST'])
+@dashboard_api_required
+def update_remark(dashboard_slug):
+    """Update the remark for a single row, capped at 500 words."""
+    dashboard = get_dashboard_config(dashboard_slug)
+    if not dashboard:
+        return jsonify({"error": "Unknown dashboard."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    sheet_name = str(payload.get("sheet_name", ""))
+    row_id = payload.get("row_id")
+    remark = str(payload.get("remark", "")).strip()
+
+    try:
+        row_id = int(row_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid row reference."}), 400
+
+    if count_words(remark) > 500:
+        return jsonify({"error": "Remark cannot exceed 500 words."}), 400
+
+    excel_path = dashboard["file"]
+    if not os.path.exists(excel_path):
+        return jsonify({"error": "Dashboard file not found."}), 404
+
+    try:
+        excel_file = pd.ExcelFile(excel_path)
+        if sheet_name not in excel_file.sheet_names:
+            return jsonify({"error": "Sheet not found."}), 404
+
+        updated_sheets = {}
+        target_found = False
+        for current_sheet in excel_file.sheet_names:
+            df = pd.read_excel(excel_file, sheet_name=current_sheet)
+            df = df.fillna('')
+            df = ensure_remark_columns(df)
+
+            if current_sheet == sheet_name:
+                if row_id < 0 or row_id >= len(df):
+                    return jsonify({"error": "Row not found."}), 404
+                df.at[row_id, 'Remark'] = remark
+                df.at[row_id, 'Remark Added By'] = session.get("employee_code", "")
+                target_found = True
+
+            updated_sheets[current_sheet] = df
+
+        if not target_found:
+            return jsonify({"error": "Remark target not found."}), 404
+
+        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+            for current_sheet, df in updated_sheets.items():
+                df.to_excel(writer, sheet_name=current_sheet, index=False)
+
+        return jsonify({
+            "success": True,
+            "message": "Remark updated successfully.",
+            "word_count": count_words(remark),
+            "added_by": session.get("employee_code", ""),
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/')
 def index():
