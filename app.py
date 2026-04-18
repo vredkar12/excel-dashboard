@@ -152,7 +152,14 @@ def build_pf_analytics(excel_path):
         "charts": []
     }
     status_counts = {"Completed": 0, "Pending": 0, "Yes": 0, "No": 0}
-    hrbp_pending_counts = {}
+    pending_breakdowns = {
+        "store_name": {"label": "Stores", "column": "Store Name", "counts": {}},
+        "cluster_region": {"label": "Cluster", "column": "Cluster Region", "counts": {}},
+        "hrbp": {"label": "HRBP", "column": "HRBP", "counts": {}},
+        "reporting_manager": {"label": "Reporting Manager", "column": "Reporting Manager", "counts": {}},
+        "gender": {"label": "Gender", "column": "Gender", "counts": {}},
+        "marital_status": {"label": "Marital Status", "column": "Marital Status", "counts": {}},
+    }
 
     if not os.path.exists(excel_path):
         return analytics
@@ -168,7 +175,6 @@ def build_pf_analytics(excel_path):
             "row_count": row_count
         })
 
-        hrbp_column = next((column for column in df.columns if str(column).strip().lower() == 'hrbp'), None)
         pf_pending_column = next((column for column in df.columns if 'pendingmination pendancy' in str(column).strip().lower() or 'nomination pendancy' in str(column).strip().lower()), None)
 
         for column in df.columns:
@@ -180,11 +186,14 @@ def build_pf_analytics(excel_path):
                 if normalized:
                     status_counts[normalized] += 1
 
-        if hrbp_column and pf_pending_column:
+        if pf_pending_column:
             for _, row in df.iterrows():
                 if is_pending_like(row.get(pf_pending_column, '')):
-                    hrbp = str(row.get(hrbp_column, '')).strip() or 'Unassigned'
-                    hrbp_pending_counts[hrbp] = hrbp_pending_counts.get(hrbp, 0) + 1
+                    for breakdown in pending_breakdowns.values():
+                        column_name = breakdown["column"]
+                        if column_name in df.columns:
+                            key = str(row.get(column_name, '')).strip() or 'Unassigned'
+                            breakdown["counts"][key] = breakdown["counts"].get(key, 0) + 1
 
     analytics["sheets"].sort(key=lambda item: item["name"])
     analytics["charts"] = [
@@ -193,8 +202,16 @@ def build_pf_analytics(excel_path):
             "counts": {key: value for key, value in status_counts.items() if value > 0}
         },
         {
-            "label": "PF Pendancy HRBP Wise",
-            "counts": dict(sorted(hrbp_pending_counts.items(), key=lambda item: item[0].lower()))
+            "label": "PF Pendancy Breakdown",
+            "type": "dropdown-pie",
+            "default_key": "hrbp",
+            "breakdowns": {
+                key: {
+                    "label": value["label"],
+                    "counts": dict(sorted(value["counts"].items(), key=lambda item: item[0].lower()))
+                }
+                for key, value in pending_breakdowns.items()
+            }
         }
     ]
     return analytics

@@ -254,6 +254,17 @@
             margin-top: 18px;
         }
 
+        .chart-select {
+            width: 100%;
+            max-width: 280px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text);
+            font: inherit;
+        }
+
         .chart-block {
             width: 100%;
             padding-top: 8px;
@@ -515,6 +526,23 @@
             return `<svg class="pie-chart" viewBox="0 0 220 220" role="img" aria-label="Status distribution pie chart">${paths}<circle cx="110" cy="110" r="44" fill="white"></circle><text x="110" y="104" text-anchor="middle" font-size="14" fill="#52606d">Cases</text><text x="110" y="124" text-anchor="middle" font-size="22" font-weight="700" fill="#1f2933">${total}</text></svg>`;
         }
 
+        function buildLegendHtml(counts) {
+            const entries = Object.entries(counts || {});
+            const colors = getChartColors();
+            return entries.length
+                ? entries.map(([label, count], index) => `<div class="legend-item"><span class="legend-label"><span class="legend-dot" style="background:${colors[index % colors.length]}"></span><span>${escapeHtml(label)}</span></span><strong>${count}</strong></div>`).join('')
+                : '<div class="subtle">No data available for this chart yet.</div>';
+        }
+
+        function updateDropdownChart(selectElement) {
+            const chartBlock = selectElement.closest('.chart-block');
+            const breakdowns = JSON.parse(chartBlock.dataset.breakdowns || '{}');
+            const selected = breakdowns[selectElement.value] || { counts: {}, label: 'Analytics' };
+            chartBlock.querySelector('.chart-current-label').textContent = selected.label;
+            chartBlock.querySelector('.chart-pie-host').innerHTML = buildPieChartSvg(selected.counts || {});
+            chartBlock.querySelector('.chart-legend').innerHTML = buildLegendHtml(selected.counts || {});
+        }
+
         function renderAnalyticsCard(slug, dashboard) {
             const analytics = dashboard.analytics || {};
             const sheets = (analytics.sheets || []).map(sheet => `${escapeHtml(sheet.name)}: ${sheet.row_count}`).join(' | ');
@@ -522,10 +550,26 @@
             const chartHtml = charts.length
                 ? charts.map(chart => {
                     const entries = Object.entries(chart.counts || {});
-                    const colors = getChartColors();
-                    const legendHtml = entries.length
-                        ? entries.map(([label, count], index) => `<div class="legend-item"><span class="legend-label"><span class="legend-dot" style="background:${colors[index % colors.length]}"></span><span>${escapeHtml(label)}</span></span><strong>${count}</strong></div>`).join('')
-                        : '<div class="subtle">No data available for this chart yet.</div>';
+                    const legendHtml = buildLegendHtml(chart.counts || {});
+
+                    if (chart.type === 'dropdown-pie') {
+                        const breakdowns = chart.breakdowns || {};
+                        const defaultKey = chart.default_key && breakdowns[chart.default_key] ? chart.default_key : Object.keys(breakdowns)[0];
+                        const selected = breakdowns[defaultKey] || { counts: {}, label: 'Analytics' };
+                        const optionsHtml = Object.entries(breakdowns).map(([key, value]) => `<option value="${escapeHtml(key)}" ${key === defaultKey ? 'selected' : ''}>${escapeHtml(value.label)}</option>`).join('');
+
+                        return `
+                            <div class="chart-block" data-breakdowns='${escapeHtml(JSON.stringify(breakdowns))}'>
+                                <div class="subtle"><strong>${escapeHtml(chart.label || 'Analytics')}</strong></div>
+                                <div class="chart-wrap">
+                                    <select class="chart-select" onchange="updateDropdownChart(this)">${optionsHtml}</select>
+                                    <div class="subtle chart-current-label"><strong>${escapeHtml(selected.label || 'Analytics')}</strong></div>
+                                    <div class="chart-pie-host">${buildPieChartSvg(selected.counts || {})}</div>
+                                    <div class="chart-legend">${buildLegendHtml(selected.counts || {})}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
 
                     return `
                         <div class="chart-block">
