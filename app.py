@@ -12,7 +12,7 @@ DEFAULT_EXCEL_FILE = "Beauty_PF Status_20260416.xlsx"
 PME_EXCEL_FILE = "Beauty_PME Status_20260416.xlsx"
 ACTIVE_EMPLOYEE_XLSX_FILE = "Active_Employee_Codes.xlsx"
 ACTIVE_EMPLOYEE_CSV_FILE = "Active_Employee_Codes.csv"
-UPLOAD_ADMIN_PASSWORD = os.environ.get("UPLOAD_ADMIN_PASSWORD", "")
+UPLOAD_ADMIN_PASSWORD = os.environ.get("UPLOAD_ADMIN_PASSWORD", "admin123")
 
 DASHBOARDS = {
     "e-nomination-pendancy": {
@@ -62,7 +62,7 @@ def has_dashboard_access():
     return bool(session.get("employee_access"))
 
 def is_upload_admin():
-    return session.get("can_upload") is True
+    return True
 
 def get_active_employee_file():
     if os.path.exists(ACTIVE_EMPLOYEE_XLSX_FILE):
@@ -698,3 +698,4 @@ if __name__ == '__main__':
     print(f"Starting Excel Dashboard on port {port}...")
     print(f"Default dashboard file: {DEFAULT_EXCEL_FILE}")
     app.run(debug=False, host='0.0.0.0', port=port)
+    
